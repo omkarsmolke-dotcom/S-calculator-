@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171513">
+  <title>My Calculator</title>
+  <style>
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  background: #171513;
+  color: #fff5ea;
+  --muted: #cfbfb2;
+  --accent: #ffab68;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.calculator {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(125px, 1fr) minmax(360px, 3fr);
+  gap: clamp(8px, 1.8vh, 18px);
+  padding: clamp(12px, 3vw, 40px);
+  background: radial-gradient(ellipse at top right, #3c261c, #171513 60%);
+}
+header, .header-actions, .history-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+h1, h2 { margin: 0; font-size: clamp(1.2rem, 3vw, 1.8rem); }
+.display {
+  background: #211b17;
+  border: 1px solid #634530;
+  border-radius: 18px;
+  padding: clamp(12px, 2vw, 24px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+label { color: var(--muted); font-size: .88rem; }
+input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  caret-color: var(--accent);
+  font: 500 clamp(1.4rem, 4vw, 3.2rem)/1.25 ui-monospace, monospace;
+  padding: 4px;
+  text-align: right;
+}
+#expression:focus { outline: none; }
+.keyboard-navigation #expression:focus-visible { outline: 2px solid #ffd09e; outline-offset: 2px; }
+input::placeholder { color: var(--muted); }
+output {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  color: var(--accent);
+  font: 600 clamp(1rem, 3vw, 2.4rem)/1.1 ui-monospace, monospace;
+}
+#status { margin: 0; font-size: .88rem; text-align: right; color: var(--muted); }
+#status:empty { display: none; }
+.keypads { display: flex; flex-direction: column; min-width: 0; }
+.buttons { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(7, minmax(44px, 1fr)); gap: clamp(5px, 1.2vw, 14px); }
+button {
+  border: 1px solid #554233;
+  border-radius: 12px;
+  color: inherit;
+  background: #302720;
+  padding: 0 .85rem;
+  min-height: 36px;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:disabled { opacity: .46; cursor: default; }
+button:not(:disabled):hover { filter: brightness(1.18); }
+button:not(:disabled):active { transform: translateY(1px); }
+:focus-visible { outline: 2px solid #ffd09e; outline-offset: 2px; }
+.buttons button { padding: 0; font-size: clamp(1.05rem, 3.2vw, 1.8rem); }
+.buttons button:first-child, .ans { color: #ffd0a7; }
+.operator { background: #51321f; color: #ffd0a7; }
+.equals { background: var(--accent); color: #211306; font-weight: 700; }
+.ans { grid-column: 1 / -1; }
+dialog { max-width: min(460px, 92vw); max-height: 80dvh; width: 100%; border: 1px solid #634530; border-radius: 15px; padding: 18px; background: #f2eaff; color: #332053; color-scheme: light; }
+#history-panel button { background: #e3d4f7; color: #332053; border-color: #a88fc8; }
+#history-panel button:focus-visible { outline-color: #674397; }
+dialog::backdrop { background: #080504bb; }
+#entries { padding: 0; list-style: none; }
+#entries li { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; margin-bottom: .4rem; }
+#entries button.delete-entry { display: grid; place-items: center; padding: 0; min-height: 44px; color: #76254c; }
+.delete-entry svg { width: 20px; height: 20px; }
+.scientific { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.scientific[hidden] { display: none; }
+.scientific button { padding: 0; background: #493226; min-height: 44px; }
+#entries button { width: 100%; padding: .65rem; text-align: left; overflow-wrap: anywhere; }
+@media (min-width: 800px) {
+  .calculator { grid-template-columns: minmax(0, 1fr) minmax(360px, 52%); grid-template-rows: auto 1fr; }
+  header { grid-column: 1 / -1; }
+  .display { align-self: start; min-height: 230px; }
+}
+</style>
+</head>
+<body>
+  <main class="calculator">
+    <header><h1>Calculator</h1><div class="header-actions"><button id="scientific-toggle" type="button" aria-label="Scientific keypad" aria-controls="scientific" aria-expanded="false">↙↗</button><button id="history" type="button">History</button></div></header>
+    <section class="display" aria-label="Calculation">
+      <label for="expression">Expression</label>
+      <input id="expression" type="text" inputmode="none" autocomplete="off" spellcheck="false" placeholder="0" maxlength="512">
+      <output id="result" for="expression" aria-live="polite">0</output>
+      <p id="status" role="status"></p>
+    </section>
+    <div class="keypads">
+    <section id="scientific" class="scientific" aria-label="Scientific keypad" hidden>
+      <button id="angle-mode" type="button" aria-label="Angle unit: degrees">DEG</button>
+      <button data-key="sin(">sin</button><button data-key="cos(">cos</button><button data-key="tan(">tan</button>
+      <button data-key="√(" aria-label="Square root">√</button><button data-key="^2" aria-label="Square">x²</button>
+      <button data-key="^" aria-label="Power">xʸ</button><button data-key="π" aria-label="Pi">π</button>
+      <button data-key="log(">log</button><button data-key="ln(">ln</button><button data-key="abs(">abs</button>
+      <button data-key="e" aria-label="Euler’s number">e</button>
+    </section>
+    <section class="buttons" aria-label="Keypad">
+      <button data-action="clear" aria-label="All clear">AC</button><button data-action="left" aria-label="Move cursor left">←</button><button data-action="right" aria-label="Move cursor right">→</button><button data-action="delete" aria-label="Backspace">⌫</button>
+      <button data-key="(">(</button><button data-key=")">)</button><button data-key="%">%</button><button class="operator" data-key="÷" aria-label="Divide">÷</button>
+      <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><button class="operator" data-key="×" aria-label="Multiply">×</button>
+      <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button><button class="operator" data-key="−" aria-label="Subtract">−</button>
+      <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button><button class="operator" data-key="+" aria-label="Add">+</button>
+      <button data-key="00">00</button><button data-key="0">0</button><button data-key=".">.</button><button class="equals" data-action="equals" aria-label="Equals">=</button>
+      <button class="ans" data-action="ans" disabled>Ans</button>
+    </section>
+    </div>
+  </main>
+<dialog id="history-panel" aria-labelledby="history-title">
+    <div class="history-header"><h2 id="history-title">History</h2><button id="close-history" type="button">Close</button></div>
+    <ul id="entries"></ul>
+    <p id="empty-history">No calculations yet.</p>
+  </dialog>
+<script>
+(() => {
+'use strict';
+
+const calculator = document.querySelector('.calculator');
+if (calculator.dataset.ready === 'true') return;
+calculator.dataset.ready = 'true';
+
+// Accept one button click per primary pointer press. Native keyboard and
+// assistive-technology clicks have no pointer type and a zero click count.
+let buttonPress = null;
+document.addEventListener('pointerdown', event => {
+  if (!event.isPrimary || event.button !== 0) return;
+  const button = event.target.closest('button');
+  buttonPress = button ? { button, pointerId: event.pointerId, used: false } : null;
+}, true);
+document.addEventListener('pointercancel', event => {
+  if (buttonPress?.pointerId === event.pointerId) buttonPress = null;
+}, true);
+document.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button || (!event.pointerType && event.detail === 0)) return;
+
+  if (buttonPress?.button === button && !buttonPress.used &&
+      (!event.pointerType || buttonPress.pointerId === event.pointerId)) {
+    buttonPress.used = true;
+    return;
+  }
+
+  // A duplicate can land on a different button after the UI changes.
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+
+function evaluateExpression(expression, angleMode = 'DEG') {
+  const source = expression.replace(/[×÷−]/g, symbol => ({ '×': '*', '÷': '/', '−': '-' })[symbol]);
+  const tokens = source.match(/(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|sin|cos|tan|log|ln|abs|\s+|./giu) ?? [];
+  const parts = tokens.filter(token => token.trim());
+  let position = 0;
+
+  function take(token) {
+    if (parts[position] !== token) return false;
+    position += 1;
+    return true;
+  }
+
+  const radians = value => angleMode === 'DEG' ? (value % 360) * Math.PI / 180 : value;
+  const functions = {
+    sin: value => Math.sin(radians(value)),
+    cos: value => Math.cos(radians(value)),
+    tan: value => {
+      const angle = radians(value);
+      if (Math.abs(Math.cos(angle)) < 1e-15) throw Error('Tangent is undefined at this angle');
+      return Math.tan(angle);
+    },
+    log: Math.log10, ln: Math.log, abs: Math.abs, '√': Math.sqrt
+  };
+
+  function operand() {
+    let value;
+    if (take('(')) {
+      value = sum();
+      if (!take(')')) throw Error('Add a closing parenthesis');
+    } else {
+      const token = parts[position++];
+      if (!token) throw Error('Complete the expression');
+      if (token === 'π') return postfix(Math.PI);
+      if (token.toLowerCase() === 'e') return postfix(Math.E);
+      const fn = functions[token.toLowerCase()];
+      if (typeof fn === 'function') {
+        if (!take('(')) throw Error('Add an opening parenthesis');
+        const argument = sum();
+        if (!take(')')) throw Error('Add a closing parenthesis');
+        const answer = fn(argument);
+        if (Number.isNaN(answer) || (answer === -Infinity && argument === 0)) {
+          throw Error('Value is outside the function’s domain');
+        }
+        return postfix(answer);
+      }
+      if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(token)) {
+        throw Error('Check the expression');
+      }
+      value = Number(token);
+      if (!Number.isFinite(value)) throw Error('Number is out of range');
+    }
+    return postfix(value);
+  }
+
+  function postfix(value) {
+    while (take('%')) value /= 100;
+    return value;
+  }
+
+  function factor() {
+    if (take('+')) return factor();
+    if (take('-')) return -factor();
+    const base = operand();
+    return take('^') ? base ** factor() : base;
+  }
+
+  function product() {
+    let value = factor();
+    while (parts[position] === '*' || parts[position] === '/') {
+      const operator = parts[position++];
+      const next = factor();
+      if (operator === '/' && next === 0) throw Error('Cannot divide by zero');
+      value = operator === '*' ? value * next : value / next;
+    }
+    return value;
+  }
+function sum() {
+    let value = product();
+    while (parts[position] === '+' || parts[position] === '-') {
+      const operator = parts[position++];
+      const next = product();
+      value = operator === '+' ? value + next : value - next;
+    }
+    return value;
+  }
+
+  const value = sum();
+  if (position !== parts.length) throw Error('Check the expression');
+  if (!Number.isFinite(value)) throw Error('Result is out of range');
+  return String(Number(value.toPrecision(15)));
+}
+
+const expression = document.querySelector('#expression');
+const result = document.querySelector('#result');
+const status = document.querySelector('#status');
+const historyPanel = document.querySelector('#history-panel');
+const scientific = document.querySelector('#scientific');
+const scientificToggle = document.querySelector('#scientific-toggle');
+const angleButton = document.querySelector('#angle-mode');
+let angleMode = 'DEG';
+
+function setAngleMode(mode) {
+  angleMode = mode;
+  angleButton.textContent = mode;
+  angleButton.setAttribute('aria-label', 'Angle unit: ' + (mode === 'DEG' ? 'degrees' : 'radians'));
+}
+
+const ans = document.querySelector('[data-action="ans"]');
+let lastAnswer = '';
+let completed = false;
+let currentResult = '';
+let history = [];
+
+try {
+  const stored = JSON.parse(localStorage.getItem('calculator-history') ?? '[]');
+  if (Array.isArray(stored)) {
+    history = stored.filter(entry => typeof entry?.expression === 'string' && typeof entry?.result === 'string').slice(0, 30);
+  }
+} catch {}
+
+function saveHistory() {
+  try { localStorage.setItem('calculator-history', JSON.stringify(history)); } catch {}
+}
+
+function updateResult(commit = false) {
+  const text = expression.value.trim();
+  status.textContent = '';
+  currentResult = '';
+  result.value = text ? '—' : '0';
+  if (!text) return;
+
+  try {
+    currentResult = evaluateExpression(text, angleMode);
+  } catch (error) {
+    if (commit) status.textContent = error.message;
+    return;
+  }
+
+  result.value = currentResult;
+  if (!commit) return;
+
+  lastAnswer = currentResult;
+  ans.disabled = false;
+  completed = true;
+  if (history[0]?.expression === text && (history[0]?.angleMode ?? 'DEG') === angleMode && history[0]?.result === currentResult) return;
+  history = [{ expression: text, result: currentResult, angleMode }, ...history].slice(0, 30);
+  saveHistory();
+}
+
+function edit(text) {
+  if (completed) {
+    const usesPrevious = /^[+−×÷%]$/.test(text) || text.startsWith('^');
+    expression.value = usesPrevious ? lastAnswer : '';
+    if (text.startsWith('^') && lastAnswer.startsWith('-')) {
+      expression.value = '(' + lastAnswer + ')';
+    }
+    expression.setSelectionRange(expression.value.length, expression.value.length);
+  }
+  const { selectionStart, selectionEnd } = expression;
+  if (expression.value.length - (selectionEnd - selectionStart) + text.length > expression.maxLength) return;
+  expression.setRangeText(text, selectionStart, selectionEnd, 'end');
+  completed = false;
+  updateResult();
+}
+function move(direction) {
+  const start = expression.selectionStart;
+  const end = expression.selectionEnd;
+  const next = direction < 0
+    ? (start === end ? Math.max(0, start - 1) : start)
+    : (start === end ? Math.min(expression.value.length, end + 1) : end);
+  expression.setSelectionRange(next, next);
+  completed = false;
+}
+
+function erase() {
+  completed = false;
+  const start = expression.selectionStart;
+  const end = expression.selectionEnd;
+  expression.setRangeText('', start === end ? Math.max(0, start - 1) : start, end, 'end');
+  updateResult();
+}
+
+function clear() {
+  expression.value = '';
+  completed = false;
+  updateResult();
+}
+
+const actions = {
+  clear, delete: erase, left: () => move(-1), right: () => move(1),
+  equals: () => updateResult(true), ans: () => edit(lastAnswer.startsWith('-') ? '(' + lastAnswer + ')' : lastAnswer)
+};
+
+document.querySelector('.keypads').addEventListener('pointerdown', event => {
+  if (event.target.closest('button')) event.preventDefault();
+});
+document.querySelector('.keypads').addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button || (!button.dataset.action && !button.dataset.key)) return;
+  expression.focus({ preventScroll: true });
+  if (button.dataset.action) actions[button.dataset.action]();
+  else edit(button.dataset.key);
+});
+expression.addEventListener('input', () => {
+  completed = false;
+  updateResult();
+});
+expression.addEventListener('pointerdown', () => { completed = false; });
+document.addEventListener('pointerdown', () => {
+  document.documentElement.classList.remove('keyboard-navigation');
+}, true);
+document.addEventListener('keydown', event => {
+  if (event.key === 'Tab') document.documentElement.classList.add('keyboard-navigation');
+  if (event.ctrlKey || event.metaKey || event.altKey || historyPanel.open) return;
+  if (event.repeat && (event.key === 'Enter' || event.key === ' ' || /^[0-9.+%()*/^−×÷=-]$/.test(event.key))) {
+    event.preventDefault();
+    return;
+  }
+  if (event.key === 'Enter' && event.target.closest('button')) return;
+  if (event.key === 'Escape' || event.key === 'Enter' || event.key === '=') {
+    event.preventDefault();
+    expression.focus({ preventScroll: true });
+    actions[event.key === 'Escape' ? 'clear' : 'equals']();
+    return;
+  }
+  const symbols = { '*': '×', '/': '÷', '-': '−' };
+  if (/^[0-9.+%()*/^−×÷-]$/.test(event.key)) {
+    event.preventDefault();
+    expression.focus({ preventScroll: true });
+    edit(symbols[event.key] ?? event.key);
+  } else if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Backspace', 'Delete'].includes(event.key)) {
+    completed = false;
+  }
+});
+
+scientificToggle.addEventListener('click', () => {
+  scientific.hidden = !scientific.hidden;
+  scientificToggle.setAttribute('aria-expanded', String(!scientific.hidden));
+});
+angleButton.addEventListener('click', () => {
+  setAngleMode(angleMode === 'DEG' ? 'RAD' : 'DEG');
+  completed = false;
+  updateResult();
+});
+
+document.querySelector('#close-history').addEventListener('click', () => historyPanel.close());
+function renderHistory() {
+  const entries = document.querySelector('#entries');
+  entries.replaceChildren();
+  document.querySelector('#empty-history').hidden = history.length > 0;
+  for (const entry of history) {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.textContent = entry.expression + ' = ' + entry.result;
+    button.addEventListener('click', () => {
+      historyPanel.close();
+      expression.value = entry.expression;
+      expression.focus();
+      expression.setSelectionRange(entry.expression.length, entry.expression.length);
+      setAngleMode(entry.angleMode === 'RAD' ? 'RAD' : 'DEG');
+      updateResult();
+      completed = true;
+      lastAnswer = entry.result;
+      ans.disabled = false;
+    });
+const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'delete-entry';
+    remove.setAttribute('aria-label', 'Delete ' + button.textContent);
+    remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V3h6v3m4 0-1 15H6L5 6m5 4v7m4-7v7"/></svg>';
+    remove.addEventListener('click', () => {
+      const index = history.indexOf(entry);
+      history.splice(index, 1);
+      saveHistory();
+      renderHistory();
+      const remaining = entries.querySelectorAll('.delete-entry');
+      (remaining[Math.min(index, remaining.length - 1)] ?? document.querySelector('#close-history')).focus();
+    });
+    item.append(button, remove);
+    entries.append(item);
+  }
+}
+
+document.querySelector('#history').addEventListener('click', () => {
+  renderHistory();
+  historyPanel.showModal();
+});
+
+expression.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>
